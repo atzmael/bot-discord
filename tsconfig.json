@@ -1,0 +1,48 @@
+{
+    "compilerOptions": {
+        "baseUrl": "./src",
+        "lib": [
+            "es6"
+        ],
+        "target": "es2015",
+        "module": "commonjs",
+        "strict": true,
+        "moduleResolution": "Node",
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "resolveJsonModule": true,
+        "paths": {
+            "@events/*": [
+                "./events/*"
+            ],
+            "@commands/*": [
+                "./commands/*"
+            ],
+            "@interactions/*": [
+                "./interactions/*"
+            ],
+            "@interfaces/*": [
+                "./interfaces/*"
+            ],
+            "@models/*": [
+                "./models/*"
+            ],
+            "@utils/*": [
+                "./utils/*"
+            ],
+            "@vars": [
+                "../vars.ts"
+            ]
+        }
+    },
+    "include": [
+        "src/*.ts",
+        "src/**/*.ts",
+        "index.ts",
+        "deployCommands.ts"
+    ],
+    "exclude": [
+        "node_modules",
+        "**/*.spec.ts"
+    ]
+}
