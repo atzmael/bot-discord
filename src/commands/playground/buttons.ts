@@ -31,7 +31,7 @@ const buttonTest1 = async (interaction: ButtonInteraction) => {
 }
 
 const Buttons: CommandTypes = {
-    active: true,
+    active: false,
     family: "playground",
     data: new SlashCommandBuilder()
         .setName('buttons')

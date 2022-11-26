@@ -1,16 +1,21 @@
-import { EmbedBuilder, SlashCommandBuilder, SlashCommandNumberOption, SlashCommandStringOption, SlashCommandSubcommandBuilder, SlashCommandUserOption } from "@discordjs/builders";
+import { SlashCommandBuilder, SlashCommandSubcommandBuilder, SlashCommandUserOption } from "@discordjs/builders";
 import { CreateMessageCollector } from "@interactions/CreateCollector";
 import { CreateMessageButton } from "@interactions/CreateMessageButton";
 import { CreateMessageRow } from "@interactions/CreateMessageRow";
+import { ICommandProps } from "@interfaces/commandTypes";
 import { CustomButtonProps } from "@interfaces/extendDiscordJS";
-import { findFamilyBySlug, findUserById } from "@models/Family";
+import { findAllSeasons, findFamilyBySlug, findUserById, SeasonStatus, sortFamilies, updateFamily, updateUser, UserProps } from "@models/Family";
 import { getFirstGroup } from "@utils/valueParsingUtils";
-import { ButtonInteraction, CommandInteraction, MessageComponentInteraction, MessageInteraction } from "discord.js";
+import { checkRole } from "@utils/Authorization";
+import vars from "@vars";
+import { ButtonInteraction, CommandInteraction } from "discord.js";
 import { MessageButtonStyles } from "discord.js/typings/enums";
 
-const cmdProps = {
-    name: "hexa-fmod",
+const cmdProps: ICommandProps = {
+    name: `hexa-${vars.text.entity_name_short}mod`,
     permissions: "0",
+    rolesAuthorized: [...vars.globalAuthorizations.mod],
+    channelsRestrictred: [],
 }
 
 const handleFamilyModCmd = async (interaction: CommandInteraction) => {
@@ -24,40 +29,48 @@ const handleFamilyModCmd = async (interaction: CommandInteraction) => {
     // fm-activity msg|vc|emojis|twitch : récupère les données d'activités des utilisateurs (trackers_activity)
     // Donner des points suivants le classement d'activité et non en fonction du nombre de message > éviter les spams message pour avoir pleins de points
 
+    if (!checkRole(cmdProps.rolesAuthorized, interaction.member!.roles)) {
+        interaction.reply("Vous n'avez pas la permission pour effectuer cette commande.");
+        return;
+    }
+
     if (!interaction.options) return;
     let iReply: any = "Aucune interaction detectée...";
 
+    const { text } = vars;
+
     const subcmd = interaction.options.getSubcommand();
 
-    // PUBLIC COMMANDS
     if ("user" === subcmd) {
-        const btnUserPtsAdd: CustomButtonProps = {
-            customId: "btn_user_pts_add",
-            label: "Ajout de points",
-            style: MessageButtonStyles.PRIMARY
+        let currSeason = await findAllSeasons({ status: SeasonStatus.GOING });
+        if (currSeason.length <= 0) {
+            iReply = { content: "Impossible de gérer les points d'un utilisateur si il n'y a pas de saison en cours..." };
+        } else {
+            const btnUserPtsAdd: CustomButtonProps = {
+                customId: "btn_user_pts_add",
+                label: "Ajout de points",
+                style: MessageButtonStyles.PRIMARY
+            }
+            const btn2 = CreateMessageButton(btnUserPtsAdd);
+
+            const btnUserPtsRemove: CustomButtonProps = {
+                customId: "btn_user_pts_remove",
+                label: "Retrait de points",
+                style: MessageButtonStyles.PRIMARY
+            }
+            const btn3 = CreateMessageButton(btnUserPtsRemove);
+
+            const btnUserPtsSet: CustomButtonProps = {
+                customId: "btn_user_pts_set",
+                label: "Définir les points",
+                style: MessageButtonStyles.PRIMARY
+            }
+            const btn4 = CreateMessageButton(btnUserPtsSet);
+
+            const row = CreateMessageRow([btn2, btn3, btn4]);
+
+            iReply = { content: "Choisissez une option", components: [row] };
         }
-        const btn2 = CreateMessageButton(btnUserPtsAdd);
-
-        const btnUserPtsRemove: CustomButtonProps = {
-            customId: "btn_user_pts_remove",
-            label: "Retrait de points",
-            style: MessageButtonStyles.PRIMARY
-        }
-        const btn3 = CreateMessageButton(btnUserPtsRemove);
-
-        const btnUserPtsSet: CustomButtonProps = {
-            customId: "btn_user_pts_set",
-            label: "Définir les points",
-            style: MessageButtonStyles.PRIMARY
-        }
-        const btn4 = CreateMessageButton(btnUserPtsSet);
-
-        const row = CreateMessageRow([btn2, btn3, btn4]);
-
-        iReply = { content: "Choisissez une option", components: [row] };
-
-    } else if ("activity" === subcmd) {
-
     } else if ("user-info" === subcmd) {
         let user = interaction.options.getUser("mention", true);
         if (!user) return;
@@ -68,8 +81,8 @@ const handleFamilyModCmd = async (interaction: CommandInteraction) => {
             if (!!fam) {
                 let contrib = userFound.points! * 100 / fam.points!;
                 fields.push({ name: `Participe à la saison en cours`, value: '\u200b' });
-                fields.push({ name: "Famille", value: fam.name!, inline: true });
-                fields.push({ name: "Contribution dans la famille", value: `${contrib.toFixed(0).toString()}%`, inline: true });
+                fields.push({ name: text.entity_name.toUpperCase(), value: fam.name!, inline: true });
+                fields.push({ name: `Contribution dans la ${text.entity_name}`, value: `${contrib.toFixed(0).toString()}%`, inline: true });
                 fields.push({ name: '\u200b', value: '\u200b' });
                 fields.push({ name: "Rank", value: userFound.rank!, inline: true });
                 fields.push({ name: "Points", value: userFound.points!.toString(), inline: true });
@@ -119,6 +132,7 @@ const waitForUserMessage = (interaction: any, reply: string) => {
 const btnUserPtsAdd = async (interaction: ButtonInteraction) => {
     let userToHandleID = null;
     let ptsToAdd = null;
+    let userObject: UserProps | null = null;
 
     let userIdCollection: { clt: any, msgr: any } = await waitForUserMessage(interaction, `Mentionner l'utilisateur à gérer`);
     if (!userIdCollection) return;
@@ -126,6 +140,11 @@ const btnUserPtsAdd = async (interaction: ButtonInteraction) => {
     let userIdMatchArray = getFirstGroup(/^<@([0-9]+)>$/gm, userIdMessage.content);
     if (userIdMatchArray.length === 1) {
         userToHandleID = userIdMatchArray[0];
+        userObject = await findUserById(userToHandleID);
+        if (!userObject) {
+            userIdMessage.delete();
+            userIdCollection.msgr.edit("L'utilisateur n'a encore jamais participé à une saison !");
+        }
     } else {
         userIdMessage.delete();
         userIdCollection.msgr.edit("On a dit de mentionner l'utilisateur, pas de faire sa liste de course !");
@@ -140,15 +159,68 @@ const btnUserPtsAdd = async (interaction: ButtonInteraction) => {
     } else {
         ptsMessage.delete();
         // TODO: choper le followUp pour le changer et non changer la réponse de base ici !
-        ptsCollection.msgr.edit("On a dit de donner un nombre, pas de faire sa liste de course !");
+        await interaction.followUp("On a dit de donner un nombre, pas de faire sa liste de course !");
+        // ptsCollection.msgr.edit("On a dit de donner un nombre, pas de faire sa liste de course !");
     }
-    if (!!userToHandleID && !!ptsToAdd) {
-        console.log("GIVE HIM HIS POINTS");
+    if (!!userToHandleID && !!ptsToAdd && !!userObject) {
+        let reasonCollection: { clt: any, msgr: any } = await waitForUserMessage(interaction, `Indique la raison (event, giveaway, autre)`);
+        let family = await findFamilyBySlug(userObject.family!);
+        await updateUser(interaction.user.id, {
+            points: userObject.points! + parseInt(ptsToAdd)
+        });
+        await updateFamily(userObject.family!, {
+            points: family!.points! + parseInt(ptsToAdd)
+        })
+        await sortFamilies();
+        await interaction.followUp(`${ptsToAdd}pts ajouté à ${userObject.username}. Raison : ${reasonCollection.clt.first().content}`);
     }
 }
 
 const btnUserPtsRemove = async (interaction: ButtonInteraction) => {
+    let userToHandleID = null;
+    let ptsToRemove = null;
+    let userObject: UserProps | null = null;
 
+    let userIdCollection: { clt: any, msgr: any } = await waitForUserMessage(interaction, `Mentionner l'utilisateur à gérer`);
+    if (!userIdCollection) return;
+    let userIdMessage = userIdCollection.clt.first();
+    let userIdMatchArray = getFirstGroup(/^<@([0-9]+)>$/gm, userIdMessage.content);
+    if (userIdMatchArray.length === 1) {
+        userToHandleID = userIdMatchArray[0];
+        userObject = await findUserById(userToHandleID);
+        if (!userObject) {
+            userIdMessage.delete();
+            userIdCollection.msgr.edit("L'utilisateur n'a encore jamais participé à une saison !");
+        }
+    } else {
+        userIdMessage.delete();
+        userIdCollection.msgr.edit("On a dit de mentionner l'utilisateur, pas de faire sa liste de course !");
+    }
+
+    let ptsCollection: { clt: any, msgr: any } = await waitForUserMessage(interaction, `Indique le nombre de points à retirer à cet utilisateur`);
+    if (!ptsCollection) return;
+    let ptsMessage = ptsCollection.clt.first();
+    let ptsMatchArray = ptsMessage.content.match(/^[0-9]+$/gm);
+    if (ptsMatchArray.length === 1) {
+        ptsToRemove = ptsMatchArray[0];
+    } else {
+        ptsMessage.delete();
+        // TODO: choper le followUp pour le changer et non changer la réponse de base ici !
+        await interaction.followUp("On a dit de donner un nombre, pas de faire sa liste de course !");
+        // ptsCollection.msgr.edit("On a dit de donner un nombre, pas de faire sa liste de course !");
+    }
+    if (!!userToHandleID && !!ptsToRemove && !!userObject) {
+        let reasonCollection: { clt: any, msgr: any } = await waitForUserMessage(interaction, `Indique la raison (event, giveaway, autre)`);
+        let family = await findFamilyBySlug(userObject.family!);
+        await updateUser(interaction.user.id, {
+            points: userObject.points! - parseInt(ptsToRemove)
+        });
+        await updateFamily(userObject.family!, {
+            points: family!.points! - parseInt(ptsToRemove)
+        })
+        await sortFamilies();
+        await interaction.followUp(`${ptsToRemove}pts retiré à ${userObject.username}. Raison : ${reasonCollection.clt.first().content}`);
+    }
 }
 
 const btnUserPtsSet = async (interaction: ButtonInteraction) => {
@@ -160,7 +232,7 @@ module.exports = {
     family: "hexa",
     data: new SlashCommandBuilder()
         .setName(cmdProps.name)
-        .setDescription("Commandes de modération relatives aux familles")
+        .setDescription(`Commandes de modération relatives aux ${vars.text.entity_name}s`)
         .setDMPermission(false)
         .setDefaultMemberPermissions(cmdProps.permissions)
         .addSubcommand((subcommand: SlashCommandSubcommandBuilder) =>

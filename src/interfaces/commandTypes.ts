@@ -14,3 +14,10 @@ export interface CommandTypes {
     };
     adminOnly?: boolean;
 }
+
+export interface ICommandProps {
+    name: string;
+    permissions: string;
+    rolesAuthorized: Array<string>;
+    channelsRestrictred: Array<string>;
+}

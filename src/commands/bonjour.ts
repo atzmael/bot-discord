@@ -1,8 +1,9 @@
 import { SlashCommandBuilder } from "@discordjs/builders";
+import { sortFamilies } from "@models/Family";
 import { CommandInteraction } from "discord.js";
 
 module.exports = {
-    active: true,
+    active: false,
     family: "misc",
     data: new SlashCommandBuilder()
         .setName('bjr')

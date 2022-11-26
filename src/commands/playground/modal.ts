@@ -59,7 +59,7 @@ const modalTest1 = async (interaction: ModalSubmitInteraction) => {
 }
 
 const Modal: CommandTypes = {
-    active: true,
+    active: false,
     family: "playground",
     data: new SlashCommandBuilder()
         .setName(commandProps.name)

@@ -22,7 +22,7 @@ const helpRun = (message: any, args: any, client: any, Discord: any) => {
 }
 
 module.exports = {
-    active: true,
+    active: false,
     family: "general",
     data: new SlashCommandBuilder()
         .setName('help')

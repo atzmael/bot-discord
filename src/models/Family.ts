@@ -33,9 +33,9 @@ const UserSchema = new mongoose.Schema({
 const UserModel = mongoose.model('games_fam_users', UserSchema, 'games_fam_users');
 
 export const FamiliesBase: { [key: string]: string } = {
-    "famille_1": "Famille 1",
-    "famille_2": "Famille 2",
-    "famille_3": "Famille 3",
+    "explorateur_1": "Explorateur",
+    "looter_2": "Looter",
+    "crafteur_3": "Crafteur",
 }
 
 export const findUserById = async (userID: string) => {
@@ -63,10 +63,10 @@ export const addUser = async (data: UserProps) => {
 // games_fam_families
 
 interface FamilyProps {
-    slug: string;
-    name: string;
-    points: number;
-    rank: string;
+    slug?: string;
+    name?: string;
+    points?: number;
+    rank?: string;
 }
 
 const FamilySchema = new mongoose.Schema({
@@ -94,7 +94,30 @@ export const updateFamily = async (slug: string, data: FamilyProps) => {
     }).clone();
 }
 
+export const sortFamilies = async () => {
+    let families = await findAllFamilies();
+    families.sort((a: any, b: any) => b.points - a.points);
+    for (let i = 0; i < families.length; i++) {
+        await updateFamily(families[i].slug!, {
+            rank: (i + 1).toString()
+        })
+    }
+}
+
 // games_fam_seasons
+
+export const emptySeason: SeasonProps = {
+    name: "",
+    slug: "",
+    status: 0,
+    start_date: 0,
+    end_date: 0,
+    duration: 0,
+    leader: "",
+    finalTotalPoints: 0,
+    finalRanking: new Array<FamilyProps>,
+    users: new Array<UserProps>
+}
 
 export interface SeasonProps {
     slug?: string;
@@ -166,8 +189,3 @@ export const addSeason = async (data: SeasonProps) => {
 
 
 // Utils
-
-export const calculateRank = async () => {
-    let families = await findAllFamilies();
-    console.log("Families", families);
-}

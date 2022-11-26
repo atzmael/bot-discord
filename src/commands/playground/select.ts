@@ -45,7 +45,7 @@ const selectTest1 = async (interaction: SelectMenuInteraction) => {
 }
 
 const Select: CommandTypes = {
-    active: true,
+    active: false,
     family: "playground",
     data: new SlashCommandBuilder()
         .setName('select')

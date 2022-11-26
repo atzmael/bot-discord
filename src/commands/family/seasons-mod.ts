@@ -1,23 +1,35 @@
 import { SlashCommandBuilder, SlashCommandSubcommandBuilder } from "@discordjs/builders";
 import { CreateMessageRow } from "@interactions/CreateMessageRow";
+import { CreateMessageSelect } from "@interactions/CreateMessageSelect";
 import { CreateModal } from "@interactions/CreateModal";
 import { CreateTextInput } from "@interactions/CreateTextInput";
 import { CustomClientProps, CustomModalOptions } from "@interfaces/extendDiscordJS";
-import { addSeason, findAllSeasons, SeasonProps, SeasonStatus } from "@models/Family";
+import { addSeason, emptySeason, findAllSeasons, findSeasonBySlug, SeasonProps, SeasonStatus, SeasonStatusLabel, updateFamily, updateSeason } from "@models/Family";
 import { sanitizeString, slugifyString } from "@utils/valueParsingUtils";
-import { CommandInteraction, ModalSubmitInteraction, TextInputComponentOptions } from "discord.js";
+import { CommandInteraction, MessageSelectMenuOptions, ModalSubmitInteraction, SelectMenuInteraction, TextInputComponentOptions } from "discord.js";
+import vars from "@vars";
+import { checkRole } from "@utils/Authorization";
 
 const cmdProps = {
     name: "hexa-smod",
     permissions: "0",
+    rolesAuthorized: [...vars.globalAuthorizations.mod],
+    channelsRestrictred: [],
 }
+
+let selectedSeason: SeasonProps = emptySeason;
 
 const handleSeasonsModCmd = async (interaction: CommandInteraction, client: CustomClientProps) => {
     // Display list of commandes for seasons
 
     // Mod -> à mettre dans des commandes à part avec perms sur la modification de pseudo pour restreindre
-    // fm-season create
+    // OK fm-season create
     // fm-season set-status <status>
+
+    if (!checkRole(cmdProps.rolesAuthorized, interaction.member!.roles)) {
+        interaction.reply("Vous n'avez pas la permission pour effectuer cette commande.");
+        return;
+    }
 
     if (!interaction.options) return;
     let iReply: any = "Aucune interaction detectée...";
@@ -84,6 +96,24 @@ const handleSeasonsModCmd = async (interaction: CommandInteraction, client: Cust
             let filteredSeasons = allSeasons.filter((s: any) => s.status !== SeasonStatus.ARCHIVED);
             if (filteredSeasons.length > 0) {
                 // TODO afficher 2 selects: 1 pour la saison à modifier, un pour le status à mettre
+                let options = [];
+                for (let i = 0; i < filteredSeasons.length; i++) {
+                    options.push({
+                        label: filteredSeasons[i].name!,
+                        value: filteredSeasons[i].slug!
+                    })
+                }
+                const selectSaisonProps: MessageSelectMenuOptions = {
+                    customId: "select_saison",
+                    placeholder: "Selectionner la saison",
+                    minValues: 1,
+                    maxValues: 1,
+                    options: options
+                }
+                const selectSaison = CreateMessageSelect(selectSaisonProps);
+                const row = CreateMessageRow([selectSaison]);
+
+                iReply = { components: [row] };
             } else {
                 iReply = "Il n'y a pas de saison disponible."
             }
@@ -135,6 +165,42 @@ const formCreateSeason = async (interaction: ModalSubmitInteraction) => {
     await interaction.reply(`La saison "${seasonData.name}" a bien été créé`);
 }
 
+const selectSaisonResponse = async (interaction: SelectMenuInteraction) => {
+    /* @ts-ignore */
+    let season: SeasonProps = await findSeasonBySlug(interaction.values[0]);
+    selectedSeason = season;
+    if (!!selectedSeason) {
+
+        let options = [];
+        for (let i = 0; i < SeasonStatusLabel.length; i++) {
+            options.push({
+                label: SeasonStatusLabel[i],
+                value: i.toString()
+            })
+        }
+        const selectStatusProps: MessageSelectMenuOptions = {
+            customId: "select_status",
+            placeholder: "Selectionner le status",
+            minValues: 1,
+            maxValues: 1,
+            options: options
+        }
+        const selectStatus = CreateMessageSelect(selectStatusProps);
+        const row = CreateMessageRow([selectStatus]);
+
+        await interaction.update({ content: `Saison selectionnée : ${selectedSeason.name}`, components: [row] })
+
+    }
+}
+
+const selectStatusResponse = async (interaction: SelectMenuInteraction) => {
+    await updateSeason(selectedSeason.slug!, {
+        status: parseInt(interaction.values[0])
+    })
+    await interaction.update({ content: `La saison "${selectedSeason.name}" est maintenant **${SeasonStatusLabel[parseInt(interaction.values[0])]}**`, components: [] });
+    selectedSeason = emptySeason;
+}
+
 module.exports = {
     active: true,
     family: "hexa",
@@ -156,6 +222,8 @@ module.exports = {
     ,
     execute: handleSeasonsModCmd,
     replyHandler: {
-        form_create_season: formCreateSeason
+        form_create_season: formCreateSeason,
+        select_saison: selectSaisonResponse,
+        select_status: selectStatusResponse
     }
 }

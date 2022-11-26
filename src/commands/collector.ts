@@ -13,7 +13,7 @@ const execute = async (interaction: CommandInteraction, client: CustomClientProp
 }
 
 const Modal: CommandTypes = {
-    active: true,
+    active: false,
     family: "playground",
     data: new SlashCommandBuilder()
         .setName(commandProps.name)
